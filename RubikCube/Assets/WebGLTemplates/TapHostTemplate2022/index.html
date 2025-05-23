@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width,height=device-height,user-scalable=no" />
+    <title>Unity WebGL Player | {{{ PRODUCT_NAME }}}</title>
+    <style>
+      * {
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico" />
+    <link rel="stylesheet" href="TemplateData/style.css" />
+#if SHOW_DIAGNOSTICS
+    <link rel="stylesheet" href="<<<TemplateData/diagnostics.css>>>" />
+    <script src="<<<TemplateData/diagnostics.js>>>"></script>
+#endif
+  </head>
+  <body>
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"></div>
+      <div id="unity-footer">
+        <div id="unity-webgl-logo"></div>
+        <div id="unity-fullscreen-button"></div>
+#if SHOW_DIAGNOSTICS
+        <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png" />
+#endif
+        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+      </div>
+    </div>
+    <script>
+            var gameInstance;
+            var container = document.querySelector("#unity-container");
+            var canvas = document.querySelector("#unity-canvas");
+            var loadingBar = document.querySelector("#unity-loading-bar");
+            var progressBarFull = document.querySelector("#unity-progress-bar-full");
+            var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+            var warningBanner = document.querySelector("#unity-warning");
+#if SHOW_DIAGNOSTICS
+            var diagnostics_icon = document.getElementById("diagnostics-icon");
+#endif
+
+            // Shows a temporary message banner/ribbon for a few seconds, or
+            // a permanent error message on top of the canvas if type=='error'.
+            // If type=='warning', a yellow highlight color is used.
+            // Modify or remove this function to customize the visually presented
+            // way that non-critical warnings and error messages are presented to the
+            // user.
+            function unityShowBanner(msg, type) {
+              function updateBannerVisibility() {
+                warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+              }
+              var div = document.createElement('div');
+              div.innerHTML = msg;
+              warningBanner.appendChild(div);
+              if (type == 'error') div.style = 'background: red; padding: 10px;';
+              else {
+                if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+                setTimeout(function() {
+                  warningBanner.removeChild(div);
+                  updateBannerVisibility();
+                }, 5000);
+              }
+              updateBannerVisibility();
+            }
+
+            var buildUrl = "Build";
+            var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+            var config = {
+              dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+              frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+      #if USE_THREADS
+              workerUrl: buildUrl + "/{{{ WORKER_FILENAME }}}",
+      #endif
+      #if USE_WASM
+              codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+      #endif
+      #if MEMORY_FILENAME
+              memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+      #endif
+      #if SYMBOLS_FILENAME
+              symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+      #endif
+              streamingAssetsUrl: "StreamingAssets",
+              companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+              productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+              productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+              showBanner: unityShowBanner,
+            };
+
+            // By default Unity keeps WebGL canvas render target size matched with
+            // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+            // Set this to false if you want to decouple this synchronization from
+            // happening inside the engine, and you would instead like to size up
+            // the canvas DOM size and WebGL render target sizes yourself.
+            // config.matchWebGLToCanvasSize = false;
+
+            if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+              // Mobile device style: fill the whole browser client area with the game canvas:
+
+              var meta = document.createElement('meta');
+              meta.name = 'viewport';
+              meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+              document.getElementsByTagName('head')[0].appendChild(meta);
+              container.className = "unity-mobile";
+              canvas.className = "unity-mobile";
+
+              // To lower canvas resolution on mobile devices to gain some
+              // performance, uncomment the following line:
+              // config.devicePixelRatio = 1;
+
+      #if SHOW_DIAGNOSTICS
+              // position the diagnostics icon in the corner on the canvas
+              diagnostics_icon.style.position = "fixed";
+              diagnostics_icon.style.bottom = "10px";
+              diagnostics_icon.style.right = "0px";
+              canvas.after(diagnostics_icon);
+      #endif
+
+            } else {
+              // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
+
+              canvas.style.width = "{{{ WIDTH }}}px";
+              canvas.style.height = "{{{ HEIGHT }}}px";
+            }
+
+      #if BACKGROUND_FILENAME
+            canvas.style.background = "url('" + buildUrl + "/{{{ BACKGROUND_FILENAME.replace(/'/g, '%27') }}}') center / cover";
+      #endif
+            loadingBar.style.display = "block";
+
+            var script = document.createElement("script");
+            script.src = loaderUrl;
+            script.onload = () => {
+              createUnityInstance(canvas, config, (progress) => {
+                progressBarFull.style.width = 100 * progress + "%";
+                    }).then((unityInstance) => {
+                      loadingBar.style.display = "none";
+      #if SHOW_DIAGNOSTICS
+                      diagnostics_icon.onclick = () => {
+                        unityDiagnostics.openDiagnosticsDiv(unityInstance.GetMemoryInfo);
+                      };
+      #endif
+                      fullscreenButton.onclick = () => {
+                        unityInstance.SetFullscreen(1);
+                      };
+                      gameInstance = unityInstance;
+                    }).catch((message) => {
+                      alert(message);
+                    });
+                  };
+
+            document.body.appendChild(script);
+    </script>
+    <script>
+      var storage = {};
+      function getStorageValue(key, defaultValue) {
+        var v = storage[key];
+        if (v === null) {
+          return defaultValue;
+        }
+        if (typeof v !== 'undefined') {
+          return v;
+        }
+        return defaultValue;
+      }
+      var TJWASMSDK = {
+        TJInitializeSDK() {
+          gameInstance.SendMessage('TJSDKManagerHandler', 'Inited', 200);
+        },
+        TJStorageSetIntSync(key, value) {
+          storage[key] = value;
+        },
+        TJStorageGetIntSync(key, defaultValue) {
+          return getStorageValue(key, defaultValue);
+        },
+        TJStorageSetFloatSync(key, value) {
+          storage[key] = value;
+        },
+        TJStorageGetFloatSync(key, defaultValue) {
+          return getStorageValue(key, defaultValue);
+        },
+        TJStorageSetStringSync(key, value) {
+          storage[key] = value;
+        },
+        TJStorageGetStringSync(key, defaultValue) {
+          return getStorageValue(key, defaultValue || '');
+        },
+        TJStorageDeleteAllSync() {
+          storage = {};
+        },
+        TJStorageDeleteKeySync(key) {
+          delete storage[key];
+        },
+        TJStorageHasKeySync(key) {
+          return typeof storage[key] !== 'undefined';
+        },
+        TJCheckSession(s, f, c) {},
+        TJAuthorize(scope, s, f, c) {},
+        TJCreateUserInfoButton(x, y, width, height, lang, withCredentials) {
+          return "";
+        },
+        TJUserInfoButtonShow(id) {},
+        TJUserInfoButtonDestroy(id) {},
+        TJUserInfoButtonHide(id) {},
+        TJUserInfoButtonOffTap(id) {},
+        TJUserInfoButtonOnTap(id) {},
+        TJOnShareAppMessage(conf, isPromise) {},
+        TJOnShareAppMessageResolve(conf) {},
+        TJOffShareAppMessage() {},
+        TJCreateBannerAd(conf) {
+          return Math.random().toString(32);
+        },
+        TJCreateRewardedVideoAd(conf) {
+          return Math.random().toString(32);
+        },
+        TJCreateInterstitialAd(conf) {
+          return Math.random().toString(32);
+        },
+        TJCreateCustomAd(conf) {},
+        TJADStyleChange(id, key, value) {},
+        TJShowAd(id) {},
+        TJHideAd(id) {},
+        TJADGetStyleValue(id, key) {},
+        TJADDestroy(id) {},
+        TJADLoad(id, succ, fail) {},
+        TJToTempFilePathSync(conf) {},
+        TJGetUserDataPath() {},
+        TJWriteFileSync(filePath, data, encoding) {},
+        TJCreateFixedBottomMiddleBannerAd(adUnitId, adIntervals, height) {
+          return Math.random().toString(32);
+        },
+        TJReportGameStart() {},
+        TJReportGameSceneError(sceneId, errorType, errStr, extJsonStr) {},
+        TJWriteLog(str) {},
+        TJWriteWarn(str) {},
+        TJHideLoadingPage() {},
+        TJPreloadConcurrent() {},
+        TJCreateInnerAudioContext() {
+          return Math.random().toString(32);
+        },
+        TJInnerAudioContextSetBool() {},
+        TJInnerAudioContextSetString() {},
+        TJInnerAudioContextSetFloat() {},
+        TJInnerAudioContextGetFloat() {},
+        TJInnerAudioContextGetBool() {},
+        TJInnerAudioContextPlay() {},
+        TJInnerAudioContextPause() {},
+        TJInnerAudioContextStop() {},
+        TJInnerAudioContextDestroy() {},
+        TJInnerAudioContextSeek() {},
+        TJInnerAudioContextAddListener(id, key) {
+          if (key === 'onCanplay') {
+            setTimeout(function () {
+              gameInstance.SendMessage(
+                'TJSDKManagerHandler',
+                'OnAudioCallback',
+                JSON.stringify({
+                  callbackId: id,
+                  errMsg: key,
+                })
+              );
+            }, 100);
+          }
+        },
+        TJInnerAudioContextRemoveListener() {},
+        TJPreDownloadAudios(paths, id) {
+          gameInstance.SendMessage(
+            'TJSDKManagerHandler',
+            'TJPreDownloadAudiosCallback',
+            JSON.stringify({
+              callbackId: id.toString(),
+              errMsg: '0',
+            })
+          );
+        },
+        TJCreateVideo() {
+          return Math.random().toString(32);
+        },
+        TJVideoPlay() {},
+        TJVideoAddListener() {},
+        TJVideoDestroy() {},
+        TJVideoExitFullScreen() {},
+        TJVideoPause() {},
+        TJVideoRequestFullScreen() {},
+        TJVideoSeek() {},
+        TJVideoStop() {},
+        TJVideoRemoveListener() {},
+        TJVideoSetProperty() {},
+        TJShowOpenData() {},
+        TJDownloadTexture(id, type, callback) {
+          var Infos = {
+            Texture: GameGlobal.TextureConfig,
+            SpriteAtlas: GameGlobal.SpriteAtlasConfig,
+          }[type];
+          if (!Infos[id]) {
+            return console.error(type + '映射id 不存在', id);
+          }
+          var path = Infos[id].p;
+          var cid = type + '_' + id;
+          if (downloadedTextures[cid]) {
+            if (downloadedTextures[cid].data) {
+              callback();
+            } else {
+              console.error(type + '映射id data 不存在！', id);
+            }
+          } else if (downloadingTextures[cid]) {
+            downloadingTextures[cid].push(callback);
+          } else {
+            downloadingTextures[cid] = [callback];
+            textureHandler.downloadFile(
+              id,
+              type,
+              GameGlobal.AUDIO_PREFIX.replace(/\/$/, '') + '/' + path.replace(/\\/g, '/')
+            );
+          }
+        },
+        TJCreateGameClubButton() {
+          return Math.random().toString(32);
+        },
+        TJGameClubButtonDestroy() {},
+        TJGameClubButtonHide() {},
+        TJGameClubButtonShow() {},
+        TJGameClubButtonAddListener() {},
+        TJGameClubButtonRemoveListener() {},
+        TJGameClubButtonSetProperty() {},
+        TJGameClubStyleChangeInt() {},
+        TJGameClubStyleChangeStr() {},
+        TJIsCloudTest() {
+          return false;
+        },
+        TJUncaughtException() {},
+        TJSetDataCDN() {},
+        TJSetPreloadList() {},
+        TJGetCachePath() {},
+        TJGetPluginCachePath() {},
+        TJGetFontRawData() {},
+        TJShareFontBuffer() {},
+        TJReportShareBehavior() {},
+        TJShowAd2() {},
+        TJToTempFilePath() {},
+        TJDataContextPostMessage() {},
+        TJHideOpenData() {},
+        TJAccessFileSync() {},
+        TJAccessFile() {},
+        TJCopyFileSync() {},
+        TJCopyFile() {},
+        TJUnlinkSync() {},
+        TJUnlink() {},
+        TJReportUserBehaviorBranchAnalytics() {},
+        TJCallFunction() {},
+        TJCallFunctionInit() {},
+        TJCloudID() {},
+        TJWriteFile() {},
+        TJWriteStringFile() {},
+        TJAppendFile() {},
+        TJAppendStringFile() {},
+        TJWriteBinFileSync() {},
+        TJReadFile() {},
+        TJReadFileSync() {},
+        TJLogManagerDebug() {},
+        TJLogManagerInfo() {},
+        TJLogManagerLog() {},
+        TJLogManagerWarn() {},
+        TJCleanAllFileCache() {},
+        TJCleanFileCache() {},
+        TJRemoveFile() {},
+        TJOnLaunchProgress() {},
+        TJMkdir() {},
+        TJMkdirSync() {},
+        TJRmdir() {},
+        TJRmdirSync() {},
+        TJCameraCreateCamera() {},
+        TJCameraCloseFrameChange() {},
+        TJCameraDestroy() {},
+        TJCameraListenFrameChange() {},
+        TJCameraOnAuthCancel() {},
+        TJCameraOnCameraFrame() {},
+        TJCameraOnStop() {},
+        TJ_GetRecorderManager() {},
+        TJ_OnRecorderError() {},
+        TJ_OnRecorderFrameRecorded() {},
+        TJ_OnRecorderInterruptionBegin() {},
+        TJ_OnRecorderInterruptionEnd() {},
+        TJ_OnRecorderPause() {},
+        TJ_OnRecorderResume() {},
+        TJ_OnRecorderStart() {},
+        TJ_OnRecorderStop() {},
+        TJ_RecorderPause() {},
+        TJ_RecorderResume() {},
+        TJ_RecorderStart() {},
+        TJ_RecorderStop() {},
+        TJ_UploadFile() {},
+        TJUploadTaskAbort() {},
+        TJUploadTaskOffHeadersReceived() {},
+        TJUploadTaskOffProgressUpdate() {},
+        TJUploadTaskOnHeadersReceived() {},
+        TJUploadTaskOnProgressUpdate() {},
+        TJStat() {},
+        TJ_GetGameRecorder() {},
+        TJ_GameRecorderOff() {},
+        TJ_GameRecorderOn() {},
+        TJ_GameRecorderStart() {},
+        TJ_GameRecorderAbort() {},
+        TJ_GameRecorderPause() {},
+        TJ_GameRecorderResume() {},
+        TJ_GameRecorderStop() {},
+        TJ_OperateGameRecorderVideo() {},
+        TJChatCreate() {},
+        TJChatHide() {},
+        TJChatShow() {},
+        TJChatClose() {},
+        TJChatOpen() {},
+        TJChatSetTabs() {},
+        TJChatOn() {},
+        TJChatOff() {},
+        TJChatSetSignature() {},
+        TJSetArrayBuffer() {},
+        TJ_FileSystemManagerReaddirSync() {},
+        TJ_FileSystemManagerReadCompressedFileSync() {},
+        TJ_FileSystemManagerClose() {},
+        TJ_FileSystemManagerFstat() {},
+        TJ_FileSystemManagerFtruncate() {},
+        TJ_FileSystemManagerGetFileInfo() {},
+        TJ_FileSystemManagerGetSavedFileList() {},
+        TJ_FileSystemManagerOpen() {},
+        TJ_FileSystemManagerRead() {},
+        TJ_FileSystemManagerReadCompressedFile() {},
+        TJ_FileSystemManagerReadZipEntry() {},
+        TJ_FileSystemManagerReaddir() {},
+        TJ_FileSystemManagerRemoveSavedFile() {},
+        TJ_FileSystemManagerRename() {},
+        TJ_FileSystemManagerRenameSync() {},
+        TJ_FileSystemManagerSaveFile() {},
+        TJ_FileSystemManagerTruncate() {},
+        TJ_FileSystemManagerUnzip() {},
+        TJ_FileSystemManagerWrite() {},
+        TJ_FileSystemManagerReadSync() {},
+        TJ_FileSystemManagerFstatSync() {},
+        TJ_FileSystemManagerStatSync() {},
+        TJ_FileSystemManagerWriteSync() {},
+        TJ_FileSystemManagerOpenSync() {},
+        TJ_FileSystemManagerSaveFileSync() {},
+        TJ_FileSystemManagerCloseSync() {},
+        TJ_FileSystemManagerFtruncateSync() {},
+        TJ_FileSystemManagerTruncateSync() {},
+        TJ_FileSystemManagerAppendFileSync() {},
+        TJ_FileSystemManagerAppendFileStringSync() {},
+        TJ_FileSystemManagerWriteStringSync() {},
+        TJ_FileSystemManagerReadZipEntryString() {},
+        TJ_FileSystemManagerWriteString() {},
+        TJ_OnNeedPrivacyAuthorization() {},
+        TJ_PrivacyAuthorizeResolve() {},
+        TJ_OnTouchCancel() {},
+        TJ_OffTouchCancel() {},
+        TJ_OnTouchEnd() {},
+        TJ_OffTouchEnd() {},
+        TJ_OnTouchMove() {},
+        TJ_OffTouchMove() {},
+        TJ_OnTouchStart() {},
+        TJ_OffTouchStart() {},
+        TJ_RegisterOnTouchCancelCallback() {},
+        TJ_RegisterOnTouchEndCallback() {},
+        TJ_RegisterOnTouchMoveCallback() {},
+        TJ_RegisterOnTouchStartCallback() {},
+        TJ_CreateTCPSocket() {},
+        TJ_TCPSocketBindWifi() {},
+        TJ_TCPSocketClose() {},
+        TJ_TCPSocketConnect() {},
+        TJ_TCPSocketWriteString() {},
+        TJ_TCPSocketWriteBuffer() {},
+        TJ_TCPSocketOffBindWifi() {},
+        TJ_TCPSocketOffClose() {},
+        TJ_TCPSocketOffConnect() {},
+        TJ_TCPSocketOffError() {},
+        TJ_TCPSocketOffMessage() {},
+        TJ_TCPSocketOnBindWifi() {},
+        TJ_TCPSocketOnClose() {},
+        TJ_TCPSocketOnConnect() {},
+        TJ_TCPSocketOnError() {},
+        TJ_TCPSocketOnMessage() {},
+        TJ_RegisterTCPSocketOnMessageCallback() {},
+        TJ_CreateUDPSocket() {},
+        TJ_UDPSocketClose() {},
+        TJ_UDPSocketConnect() {},
+        TJ_UDPSocketOffClose() {},
+        TJ_UDPSocketOffError() {},
+        TJ_UDPSocketOffListening() {},
+        TJ_UDPSocketOffMessage() {},
+        TJ_UDPSocketOnClose() {},
+        TJ_UDPSocketOnError() {},
+        TJ_UDPSocketOnListening() {},
+        TJ_UDPSocketOnMessage() {},
+        TJ_UDPSocketSendString() {},
+        TJ_UDPSocketSendBuffer() {},
+        TJ_UDPSocketSetTTL() {},
+        TJ_UDPSocketWrite() {},
+        TJ_UDPSocketBind() {},
+        TJ_RegisterUDPSocketOnMessageCallback() {},
+        TJ_OnBLECharacteristicValueChange() {},
+        TJ_OffBLECharacteristicValueChange() {},
+        TJ_RegisterOnBLECharacteristicValueChangeCallback() {},
+        TJ_StartGyroscope() {},
+        TJ_StopGyroscope() {},
+        TJ_OnGyroscopeChange() {},
+        TJ_OffGyroscopeChange() {},
+        TJ_RegisterStartGyroscopeCallback() {},
+        TJ_RegisterStopGyroscopeCallback() {},
+        TJ_RegisterOnGyroscopeChangeCallback() {},
+
+        TJ_AddCard(conf, callbackId){},
+        TJ_AuthPrivateMessage(conf, callbackId){},
+        TJ_Authorize(conf, callbackId){},
+        TJ_CheckIsAddedToMyMiniProgram(conf, callbackId){},
+        TJ_CheckSession(conf, callbackId){},
+        TJ_ChooseImage(conf, callbackId){},
+        TJ_ChooseMedia(conf, callbackId){},
+        TJ_ChooseMessageFile(conf, callbackId){},
+        TJ_CloseBLEConnection(conf, callbackId){},
+        TJ_CloseBluetoothAdapter(conf, callbackId){},
+        TJ_CompressImage(conf, callbackId){},
+        TJ_CreateBLEConnection(conf, callbackId){},
+        TJ_CreateBLEPeripheralServer(conf, callbackId){},
+        TJ_ExitMiniProgram(conf, callbackId){},
+        TJ_ExitVoIPChat(conf, callbackId){},
+        TJ_FaceDetect(conf, callbackId){},
+        TJ_GetAvailableAudioSources(conf, callbackId){},
+        TJ_GetBLEDeviceCharacteristics(conf, callbackId){},
+        TJ_GetBLEDeviceRSSI(conf, callbackId){},
+        TJ_GetBLEDeviceServices(conf, callbackId){},
+        TJ_GetBLEMTU(conf, callbackId){},
+        TJ_GetBackgroundFetchData(conf, callbackId){},
+        TJ_GetBackgroundFetchToken(conf, callbackId){},
+        TJ_GetBatteryInfo(conf, callbackId){},
+        TJ_GetBeacons(conf, callbackId){},
+        TJ_GetBluetoothAdapterState(conf, callbackId){},
+        TJ_GetBluetoothDevices(conf, callbackId){},
+        TJ_GetChannelsLiveInfo(conf, callbackId){},
+        TJ_GetChannelsLiveNoticeInfo(conf, callbackId){},
+        TJ_GetClipboardData(conf, callbackId){},
+        TJ_GetConnectedBluetoothDevices(conf, callbackId){},
+        TJ_GetExtConfig(conf, callbackId){},
+        TJ_GetFuzzyLocation(conf, callbackId){},
+        TJ_GetGameClubData(conf, callbackId){},
+        TJ_GetGroupEnterInfo(conf, callbackId){},
+        TJ_GetInferenceEnvInfo(conf, callbackId){},
+        TJ_GetLocalIPAddress(conf, callbackId){},
+        TJ_GetNetworkType(conf, callbackId){},
+        TJ_GetPrivacySetting(conf, callbackId){},
+        TJ_GetScreenBrightness(conf, callbackId){},
+        TJ_GetScreenRecordingState(conf, callbackId){},
+        TJ_GetSetting(conf, callbackId){},
+        TJ_GetShareInfo(conf, callbackId){},
+        TJ_GetStorageInfo(conf, callbackId){},
+        TJ_GetSystemInfo(conf, callbackId){},
+        TJ_GetSystemInfoAsync(conf, callbackId){},
+        TJ_GetUserInfo(conf, callbackId){},
+        TJ_GetUserInteractiveStorage(conf, callbackId){},
+        TJ_GetWeRunData(conf, callbackId){},
+        TJ_HideKeyboard(conf, callbackId){},
+        TJ_HideLoading(conf, callbackId){},
+        TJ_HideShareMenu(conf, callbackId){},
+        TJ_HideToast(conf, callbackId){},
+        TJ_InitFaceDetect(conf, callbackId){},
+        TJ_IsBluetoothDevicePaired(conf, callbackId){},
+        TJ_JoinVoIPChat(conf, callbackId){},
+        TJ_Login(conf, callbackId){},
+        TJ_MakeBluetoothPair(conf, callbackId){},
+        TJ_NavigateToMiniProgram(conf, callbackId){},
+        TJ_NotifyBLECharacteristicValueChange(conf, callbackId){},
+        TJ_OpenAppAuthorizeSetting(conf, callbackId){},
+        TJ_OpenBluetoothAdapter(conf, callbackId){},
+        TJ_OpenCard(conf, callbackId){},
+        TJ_OpenChannelsActivity(conf, callbackId){},
+        TJ_OpenChannelsEvent(conf, callbackId){},
+        TJ_OpenChannelsLive(conf, callbackId){},
+        TJ_OpenChannelsUserProfile(conf, callbackId){},
+        TJ_OpenCustomerServiceChat(conf, callbackId){},
+        TJ_OpenCustomerServiceConversation(conf, callbackId){},
+        TJ_OpenPrivacyContract(conf, callbackId){},
+        TJ_OpenSetting(conf, callbackId){},
+        TJ_OpenSystemBluetoothSetting(conf, callbackId){},
+        TJ_PreviewImage(conf, callbackId){},
+        TJ_PreviewMedia(conf, callbackId){},
+        TJ_ReadBLECharacteristicValue(conf, callbackId){},
+        TJ_RemoveStorage(conf, callbackId){},
+        TJ_RemoveUserCloudStorage(conf, callbackId){},
+        TJ_ReportScene(conf, callbackId){},
+        TJ_RequestMidasFriendPayment(conf, callbackId){},
+        TJ_RequestMidasPayment(conf, callbackId){},
+        TJ_RequestSubscribeMessage(conf, callbackId){},
+        TJ_RequestSubscribeSystemMessage(conf, callbackId){},
+        TJ_RequirePrivacyAuthorize(conf, callbackId){},
+        TJ_RestartMiniProgram(conf, callbackId){},
+        TJ_SaveFileToDisk(conf, callbackId){},
+        TJ_SaveImageToPhotosAlbum(conf, callbackId){},
+        TJ_ScanCode(conf, callbackId){},
+        TJ_SetBLEMTU(conf, callbackId){},
+        TJ_SetBackgroundFetchToken(conf, callbackId){},
+        TJ_SetClipboardData(conf, callbackId){},
+        TJ_SetDeviceOrientation(conf, callbackId){},
+        TJ_SetEnableDebug(conf, callbackId){},
+        TJ_SetInnerAudioOption(conf, callbackId){},
+        TJ_SetKeepScreenOn(conf, callbackId){},
+        TJ_SetMenuStyle(conf, callbackId){},
+        TJ_SetScreenBrightness(conf, callbackId){},
+        TJ_SetStatusBarStyle(conf, callbackId){},
+        TJ_SetUserCloudStorage(conf, callbackId){},
+        TJ_SetVisualEffectOnCapture(conf, callbackId){},
+        TJ_ShowActionSheet(conf, callbackId){},
+        TJ_ShowKeyboard(conf, callbackId){},
+        TJ_ShowLoading(conf, callbackId){},
+        TJ_ShowModal(conf, callbackId){},
+        TJ_ShowShareImageMenu(conf, callbackId){},
+        TJ_ShowShareMenu(conf, callbackId){},
+        TJ_ShowToast(conf, callbackId){},
+        TJ_StartAccelerometer(conf, callbackId){},
+        TJ_StartBeaconDiscovery(conf, callbackId){},
+        TJ_StartBluetoothDevicesDiscovery(conf, callbackId){},
+        TJ_StartCompass(conf, callbackId){},
+        TJ_StartDeviceMotionListening(conf, callbackId){},
+        TJ_StopAccelerometer(conf, callbackId){},
+        TJ_StopBeaconDiscovery(conf, callbackId){},
+        TJ_StopBluetoothDevicesDiscovery(conf, callbackId){},
+        TJ_StopCompass(conf, callbackId){},
+        TJ_StopDeviceMotionListening(conf, callbackId){},
+        TJ_StopFaceDetect(conf, callbackId){},
+        TJ_UpdateKeyboard(conf, callbackId){},
+        TJ_UpdateShareMenu(conf, callbackId){},
+        TJ_UpdateVoIPChatMuteConfig(conf, callbackId){},
+        TJ_UpdateWeChatApp(conf, callbackId){},
+        TJ_VibrateLong(conf, callbackId){},
+        TJ_VibrateShort(conf, callbackId){},
+        TJ_WriteBLECharacteristicValue(conf, callbackId){},
+        TJ_StartGameLive(conf, callbackId){},
+        TJ_CheckGameLiveEnabled(conf, callbackId){},
+        TJ_GetUserCurrentGameliveInfo(conf, callbackId){},
+        TJ_GetUserRecentGameLiveInfo(conf, callbackId){},
+        TJ_GetUserGameLiveDetails(conf, callbackId){},
+        TJ_OpenChannelsLiveCollection(conf, callbackId){},
+        TJ_OpenPage(conf, callbackId){},
+        TJ_RequestMidasPaymentGameItem(conf, callbackId){},
+        TJ_RequestSubscribeLiveActivity(conf, callbackId){},
+        TJ_OpenBusinessView(conf, callbackId){},
+
+        TJ_ExitPointerLock() {},
+        TJ_OperateGameRecorderVideo() {},
+        TJ_RemoveStorageSync() {},
+        TJ_ReportEvent() {},
+        TJ_ReportMonitor() {},
+        TJ_ReportPerformance() {},
+        TJ_ReportUserBehaviorBranchAnalytics() {},
+        TJ_RequestPointerLock() {},
+        TJ_ReserveChannelsLive() {},
+        TJ_RevokeBufferURL() {},
+        TJ_SetPreferredFramesPerSecond() {},
+        TJ_SetStorageSync() {},
+        TJ_ShareAppMessage() {},
+        TJ_TriggerGC() {},
+
+        TJ_OnAccelerometerChange() {},
+        TJ_OffAccelerometerChange() {},
+        TJ_OnAudioInterruptionBegin() {},
+        TJ_OffAudioInterruptionBegin() {},
+        TJ_OnAudioInterruptionEnd() {},
+        TJ_OffAudioInterruptionEnd() {},
+        TJ_OnBLEConnectionStateChange() {},
+        TJ_OffBLEConnectionStateChange() {},
+        TJ_OnBLEMTUChange() {},
+        TJ_OffBLEMTUChange() {},
+        TJ_OnBLEPeripheralConnectionStateChanged() {},
+        TJ_OffBLEPeripheralConnectionStateChanged() {},
+        TJ_OnBackgroundFetchData() {},
+        TJ_OnBeaconServiceChange() {},
+        TJ_OffBeaconServiceChange() {},
+        TJ_OnBeaconUpdate() {},
+        TJ_OffBeaconUpdate() {},
+        TJ_OnBluetoothAdapterStateChange() {},
+        TJ_OffBluetoothAdapterStateChange() {},
+        TJ_OnBluetoothDeviceFound() {},
+        TJ_OffBluetoothDeviceFound() {},
+        TJ_OnCompassChange() {},
+        TJ_OffCompassChange() {},
+        TJ_OnDeviceMotionChange() {},
+        TJ_OffDeviceMotionChange() {},
+        TJ_OnDeviceOrientationChange() {},
+        TJ_OffDeviceOrientationChange() {},
+        TJ_OnError() {},
+        TJ_OffError() {},
+        TJ_OnHide() {},
+        TJ_OffHide() {},
+        TJ_OnInteractiveStorageModified() {},
+        TJ_OffInteractiveStorageModified() {},
+        TJ_OnKeyDown() {},
+        TJ_OffKeyDown() {},
+        TJ_OnKeyUp() {},
+        TJ_OffKeyUp() {},
+        TJ_OnKeyboardComplete() {},
+        TJ_OffKeyboardComplete() {},
+        TJ_OnKeyboardConfirm() {},
+        TJ_OffKeyboardConfirm() {},
+        TJ_OnKeyboardHeightChange() {},
+        TJ_OffKeyboardHeightChange() {},
+        TJ_OnKeyboardInput() {},
+        TJ_OffKeyboardInput() {},
+        TJ_OnMemoryWarning() {},
+        TJ_OffMemoryWarning() {},
+        TJ_OnMessage() {},
+        TJ_OnMouseDown() {},
+        TJ_OffMouseDown() {},
+        TJ_OnMouseMove() {},
+        TJ_OffMouseMove() {},
+        TJ_OnMouseUp() {},
+        TJ_OffMouseUp() {},
+        TJ_OnNetworkStatusChange() {},
+        TJ_OffNetworkStatusChange() {},
+        TJ_OnNetworkWeakChange() {},
+        TJ_OffNetworkWeakChange() {},
+        TJ_OnScreenRecordingStateChanged() {},
+        TJ_OffScreenRecordingStateChanged() {},
+        TJ_OnShareMessageToFriend() {},
+        TJ_OnShow() {},
+        TJ_OffShow() {},
+        TJ_OnUnhandledRejection() {},
+        TJ_OffUnhandledRejection() {},
+        TJ_OnUserCaptureScreen() {},
+        TJ_OffUserCaptureScreen() {},
+        TJ_OnVoIPChatInterrupted() {},
+        TJ_OffVoIPChatInterrupted() {},
+        TJ_OnVoIPChatMembersChanged() {},
+        TJ_OffVoIPChatMembersChanged() {},
+        TJ_OnVoIPChatSpeakersChanged() {},
+        TJ_OffVoIPChatSpeakersChanged() {},
+        TJ_OnVoIPChatStateChanged() {},
+        TJ_OffVoIPChatStateChanged() {},
+        TJ_OnWheel() {},
+        TJ_OffWheel() {},
+        TJ_OnWindowResize() {},
+        TJ_OffWindowResize() {},
+
+        TJ_OnAddToFavorites() {},
+        TJ_OnAddToFavorites_Resolve(conf){},
+        TJ_OffAddToFavorites() {},
+        TJ_OnCopyUrl() {},
+        TJ_OnCopyUrl_Resolve(conf){},
+        TJ_OffCopyUrl() {},
+        TJ_OnHandoff() {},
+        TJ_OnHandoff_Resolve(conf){},
+        TJ_OffHandoff() {},
+        TJ_OnShareTimeline() {},
+        TJ_OnShareTimeline_Resolve(conf){},
+        TJ_OffShareTimeline() {},
+        TJ_OnGameLiveStateChange() {},
+        TJ_OnGameLiveStateChange_Resolve(conf){},
+        TJ_OffGameLiveStateChange() {},
+
+        TJ_SetHandoffQuery(query){
+            return "";
+        },
+        TJ_GetAccountInfoSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetAppAuthorizeSetting(){
+            return JSON.stringify({});
+        },
+        TJ_GetAppBaseInfo(){
+            return JSON.stringify({});
+        },
+        TJ_GetBatteryInfoSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetDeviceInfo(){
+            return JSON.stringify({});
+        },
+        TJ_GetEnterOptionsSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetExptInfoSync(keys){
+            return JSON.stringify({});
+        },
+        TJ_GetExtConfigSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetLaunchOptionsSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetMenuButtonBoundingClientRect(){
+            return JSON.stringify({});
+        },
+        TJ_GetStorageInfoSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetSystemInfoSync(){
+            return JSON.stringify({});
+        },
+        TJ_GetSystemSetting(){
+            return JSON.stringify({});
+        },
+        TJ_GetWindowInfo(){
+            return JSON.stringify({});
+        },
+        TJ_CreateImageData(){
+            return JSON.stringify({});
+        },
+        TJ_CreatePath2D(){
+            return JSON.stringify({});
+        },
+        TJ_IsPointerLocked(){
+            return "";
+        },
+        TJ_IsVKSupport(version){
+            return "";
+        },
+        TJ_SetCursor(path, x, y){
+            return "";
+        },
+        TJ_SetMessageToFriendQuery(option){
+            return "";
+        },
+        TJ_GetTextLineHeight(option){
+            return "";
+        },
+        TJ_LoadFont(path){
+            return "";
+        },
+        TJ_GetGameLiveState(){
+            return JSON.stringify({});
+        },
+
+        TJ_DownloadFile() {return ""},
+        TJ_CreateFeedbackButton() {return ""},
+        TJ_GetLogManager() {return ""},
+        TJ_GetRealtimeLogManager() {return ""},
+        TJ_GetUpdateManager() {return ""},
+        TJ_CreateVideoDecoder() {return ""},
+
+        TJ_DownloadTaskAbort() {},
+        TJ_DownloadTaskOffHeadersReceived() {},
+        TJ_DownloadTaskOffProgressUpdate() {},
+        TJ_DownloadTaskOnHeadersReceived() {},
+        TJ_DownloadTaskOnProgressUpdate() {},
+        TJFeedbackButtonSetProperty() {},
+        TJ_FeedbackButtonDestroy() {},
+        TJ_FeedbackButtonHide() {},
+        TJ_FeedbackButtonOffTap() {},
+        TJ_FeedbackButtonOnTap() {},
+        TJ_FeedbackButtonShow() {},
+        TJ_LogManagerDebug() {},
+        TJ_LogManagerInfo() {},
+        TJ_LogManagerLog() {},
+        TJ_LogManagerWarn() {},
+        TJ_RealtimeLogManagerAddFilterMsg() {},
+        TJ_RealtimeLogManagerError() {},
+        TJ_RealtimeLogManagerInfo() {},
+        TJ_RealtimeLogManagerSetFilterMsg() {},
+        TJ_RealtimeLogManagerWarn() {},
+        TJ_UpdateManagerApplyUpdate() {},
+        TJ_UpdateManagerOnCheckForUpdate() {},
+        TJ_UpdateManagerOnUpdateFailed() {},
+        TJ_UpdateManagerOnUpdateReady() {},
+        TJ_VideoDecoderGetFrameData() {},
+        TJ_VideoDecoderRemove() {},
+        TJ_VideoDecoderSeek() {},
+        TJ_VideoDecoderStart() {},
+        TJ_VideoDecoderStop() {},
+        TJ_VideoDecoderOff() {},
+        TJ_VideoDecoderOn() {},
+      };
+      var downloadedTextures = {};
+      var downloadingTextures = {};
+      var textureHandler = {
+        downloadFile(textureId, type, prefix) {
+          var url = prefix + '.png';
+          var cid = type + '_' + textureId;
+          var image = new Image();
+          image.src = url;
+          image.onload = function () {
+            downloadedTextures[cid] = {
+              data: image,
+            };
+            if (downloadingTextures[cid] instanceof Array) {
+              downloadingTextures[cid].forEach(v => v());
+            } else {
+              downloadingTextures[cid]();
+            }
+            delete downloadingTextures[cid];
+          };
+          image.onerror = function () {
+            console.error(url + ' 下载失败！');
+          };
+        },
+      };
+
+      var GameGlobal = {
+        TextureConfig: {},
+        SpriteAtlasConfig: {},
+        DownloadedTextures: downloadedTextures,
+        AUDIO_PREFIX: './Assets/Textures/',
+      };
+      window._ScaleRate = 1;
+    </script>
+  </body>
+</html>

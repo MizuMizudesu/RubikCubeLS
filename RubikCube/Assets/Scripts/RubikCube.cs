@@ -32,7 +32,7 @@ public class RubikCube : MonoBehaviour
 	public void StartGame()
 	{
 		ResetCube();
-		RandomMove();
+		StartCoroutine(RandomMove());
 	}
 
 	#region Reset subcubes to their original position
@@ -230,33 +230,46 @@ public class RubikCube : MonoBehaviour
 
 	#region Random Rotation For Start Game
 
-	public void RandomMove()
+	public IEnumerator RandomMove()
 	{
+		yield return StartCoroutine(RotationRandom(3, 5));
+		yield return StartCoroutine(RotationRandom(5, 6));
+		yield return StartCoroutine(RotationRandom(7, 7));
+		yield return StartCoroutine(RotationRandom(9, 8));
+		yield return StartCoroutine(RotationRandom(11, 9));
+		
+		rotationSpeed = rotationSpeed_default;
+		int savedCubeSpeed = PlayerPrefs.GetInt("CubeSpeed");
+		PlayerPrefs.SetInt("CubeSpeed", savedCubeSpeed);
+		allowMovement = true;
+		gameController.OnStartGame();
+		
+		yield break;
+		
 		if (PlayerPrefs.GetInt("Testing") == 0)
 		{
 			if (PlayerPrefs.GetInt("Difficulty") == 3)
 			{
-				StartCoroutine(RotationRandom(100, 5));
+				StartCoroutine(RotationRandom(100, 7));
 			}
 			else if (PlayerPrefs.GetInt("Difficulty") == 2)
 			{
-				StartCoroutine(RotationRandom(50, 5));
+				StartCoroutine(RotationRandom(50, 8));
 			}
 			else
 			{
-				StartCoroutine(RotationRandom(25, 5));
+				StartCoroutine(RotationRandom(25, 9));
 			}
 		}
 		else
 		{
-			StartCoroutine(RotationRandom(2, 5));
+			StartCoroutine(RotationRandom(2, 10));
 		}
 	}
 
 	private IEnumerator RotationRandom(int numberOfRotation, int speed)
 	{
 		rotationSpeed = speed;
-		int savedCubeSpeed = PlayerPrefs.GetInt("CubeSpeed");
 		PlayerPrefs.SetInt("CubeSpeed", 4);
 		for (int i = 0; i < numberOfRotation; i++)
 		{
@@ -303,11 +316,6 @@ public class RubikCube : MonoBehaviour
 			else if (ran == 18)
 				yield return RotateWholeSide(transform.Find("Front"), false);
 		}
-
-		rotationSpeed = rotationSpeed_default;
-		PlayerPrefs.SetInt("CubeSpeed", savedCubeSpeed);
-		allowMovement = true;
-		gameController.OnStartGame();
 	}
 
 	#endregion
@@ -334,7 +342,28 @@ public class RubikCube : MonoBehaviour
 	{
 		allowMovement = false;
 		GetRotationSpeed();
-		for (int i = 0; i < 90 / rotationSpeed; i++)
+		
+		Quaternion targetRotation = selectedAxix.localRotation;
+		targetRotation *= clockwise ? Quaternion.Euler(0, 0, 90) : Quaternion.Euler(0, 0, -90);
+		
+		while (true)
+		{
+			selectedAxix.transform.localRotation = Quaternion.Slerp(
+				selectedAxix.transform.localRotation,
+				targetRotation,
+				rotationSpeed * Time.deltaTime * 3
+			);
+			
+			if (Quaternion.Angle(selectedAxix.transform.localRotation, targetRotation) < 0.1f)
+			{
+				selectedAxix.transform.localRotation = targetRotation;
+				break;
+			}
+
+			yield return null;
+		}
+		
+		/*for (int i = 0; i < 90 / rotationSpeed; i++)
 		{
 			yield return new WaitForSeconds(0.001f);
 			if (clockwise)
@@ -345,7 +374,7 @@ public class RubikCube : MonoBehaviour
 			{
 				selectedAxix.Rotate(new Vector3(0, 0, -rotationSpeed));
 			}
-		}
+		}*/
 
 		ChangeNamingOfSide(selectedAxix, clockwise);
 		IsCompleted();
@@ -369,7 +398,7 @@ public class RubikCube : MonoBehaviour
 		GameObject bottomGameObject =
 			MoveToNewGameObject(rubicCube_gameobject.transform.Find("Front"), side, tempGameObject.transform);
 
-		Quaternion targetRotation = tempGameObject.transform.rotation;
+		Quaternion targetRotation = tempGameObject.transform.localRotation;
 		if (side.ToString().IndexOf("Row") == -1)
 		{
 			targetRotation *= clockwise ? Quaternion.Euler(-90, 0, 0) : Quaternion.Euler(90, 0, 0);
@@ -381,15 +410,15 @@ public class RubikCube : MonoBehaviour
 
 		while (true)
 		{
-			tempGameObject.transform.rotation = Quaternion.Slerp(
-				tempGameObject.transform.rotation,
+			tempGameObject.transform.localRotation = Quaternion.Slerp(
+				tempGameObject.transform.localRotation,
 				targetRotation,
 				rotationSpeed * Time.deltaTime * 3
 			);
 			
-			if (Quaternion.Angle(tempGameObject.transform.rotation, targetRotation) < 0.1f)
+			if (Quaternion.Angle(tempGameObject.transform.localRotation, targetRotation) < 0.1f)
 			{
-				tempGameObject.transform.rotation = targetRotation;
+				tempGameObject.transform.localRotation = targetRotation;
 				break;
 			}
 

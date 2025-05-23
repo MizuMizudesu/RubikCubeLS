@@ -7,9 +7,9 @@ namespace UI
 {
 	public class GamePanel : Panel
 	{
+		public GameObject Root;
 		public Button BackBtn;
 		public TextMeshProUGUI TimeTxt;
-		public GameObject CubeEvent;
 
 		private void OnEnable()
 		{
@@ -19,7 +19,7 @@ namespace UI
 			
 			GameManager.Inst.OnTimerEvent += OnOnTimerEvent;
 			GameManager.Inst.OnGameStart += OnOnGameStart;
-			CubeEvent.SetActive(false);
+			Root.SetActive(false);
 		}
 
 		private void OnDisable()
@@ -34,7 +34,7 @@ namespace UI
 		
 		private void OnOnGameStart()
 		{
-			CubeEvent.SetActive(true);
+			Root.SetActive(true);
 		}
 		
 		private void OnOnTimerEvent(float time)

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.taptap.minigame": "file:X:/Users/m1599/Desktop/LS/RB/com.taptap.minigame@2.0.2",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.device-simulator.devices": "1.0.0",
     "com.unity.ide.rider": "3.0.34",

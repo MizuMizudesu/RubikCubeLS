@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using Localization;
 using Singleton;
 using UI;
@@ -50,18 +51,25 @@ namespace Mgr
 				RubikCube.transform.localPosition = Vector3.zero;  
 				RubikCube.transform.localEulerAngles = Vector3.zero;
 				CurGameState = GameState.Start;
+				RubikCube.transform.parent.GetComponent<Animator>().enabled = true;
+				
 				RubikCube.StartGame(); // 打乱魔方
 				UIManager.Inst.OpenPanel<GamePanel>();	
 			}
 			else if (CurGameState == GameState.Pause)
 			{
-				ResumeGame();
+				if (m_St != null) StopCoroutine(m_St);
+				m_St = null;
+				m_St = StartCoroutine(ResumeGame());
 			}
 		}
 
+		private Coroutine m_St;
+		
 		// 魔方打乱完成，开始
 		public void OnStartGame()
 		{
+			RubikCube.transform.parent.GetComponent<Animator>().enabled = false;
 			if (CurGameState == GameState.Start)
 			{
 				m_Timer = 0;
@@ -73,16 +81,25 @@ namespace Mgr
 		
 		public void PauseGame()
 		{
+			if (m_St != null) StopCoroutine(m_St);
+			m_St = null;
+			RubikCube.transform.parent.GetComponent<Animator>().enabled = false;
 			CurGameState = GameState.Pause;
 			RubikInputController.SetInput(false);
 			UIManager.Inst.OpenPanel<MainMenuPanel>();
 		}
 
-		public void ResumeGame()
+		public IEnumerator ResumeGame()
 		{
+			RubikCube.transform.parent.GetComponent<Animator>().enabled = true;
+			RubikCube.transform.parent.gameObject.SetActive(false);
+			RubikCube.transform.parent.gameObject.SetActive(true);
 			CurGameState = GameState.Playing;
-			RubikInputController.SetInput(true);
 			UIManager.Inst.OpenPanel<GamePanel>();
+			
+			yield return new WaitForSeconds(4.7f);
+			
+			RubikInputController.SetInput(true);
 			OnGameStart?.Invoke();
 		}
 		
