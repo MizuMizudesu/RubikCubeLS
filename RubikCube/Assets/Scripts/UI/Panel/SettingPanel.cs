@@ -44,7 +44,6 @@ namespace UI
 			
 			m_BgAudioOpen.SetActive(GameManager.Inst.BgAudioPlaying);
 			m_BgAudioClose.SetActive(!GameManager.Inst.BgAudioPlaying);
-			m_VolumeSlider.value = 1;
 		}
 
 		private void OnDisable()
